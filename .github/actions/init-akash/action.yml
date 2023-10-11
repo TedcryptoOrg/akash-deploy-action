@@ -163,9 +163,9 @@ runs:
   - name: Configure the network
     shell: bash
     run: |
-      CHAIN_METADATA=$(curl -s https://raw.githubusercontent.com/${ORG}/net/master/${NET}/meta.json)
-      #FAUCET=$(curl -s https://raw.githubusercontent.com/${ORG}/net/master/$NET/faucet-url.txt)
-      NET_VERSION=$(curl -s https://raw.githubusercontent.com/${ORG}/net/master/$NET/version.txt)
+      CHAIN_METADATA=$(curl -s https://raw.githubusercontent.com/${ORG}/net/main/${NET}/meta.json)
+      #FAUCET=$(curl -s https://raw.githubusercontent.com/${ORG}/net/main/$NET/faucet-url.txt)
+      NET_VERSION=$(curl -s https://raw.githubusercontent.com/${ORG}/net/main/$NET/version.txt)
       AKASH_CHAIN_ID="$(echo $CHAIN_METADATA | jq -r .chain_id)"
       # TODO: pick RPC with lowest latency
       AKASH_NODE="$(echo $CHAIN_METADATA | jq -r .apis.rpc[0].address)"

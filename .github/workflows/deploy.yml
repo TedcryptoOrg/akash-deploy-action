@@ -10,7 +10,7 @@ env:
   ORG: akash-network
   REPO: provider
   CLIENT: provider-services
-  CLIENT_VERSION: 0.1.0
+  CLIENT_VERSION: 0.4.6
   ARCH: amd64
   # Akash Network
   NET: mainnet
