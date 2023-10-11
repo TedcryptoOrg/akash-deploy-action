@@ -1,10 +1,22 @@
 name: Deploy me
 
 on:
-  workflow_dispatch:
-  push:
-    branches:
-      - main
+  workflow_call:
+    inputs:
+      PROJECT_PATH:
+        description: 'Path for the project to deploy'
+        required: false
+        default: '.'
+    secrets:
+      SEED:
+        description: 'Seed phrase for the wallet'
+        required: true
+      PASSWORD:
+        description: 'Password to decrypt the wallet'
+        required: true
+      GITHUB_TOKEN:
+        description: 'GITHUB_TOKEN'
+        required: true
 
 env:
   ORG: akash-network
@@ -63,6 +75,8 @@ jobs:
     - name: Call Restore state
       id: call-restore-state
       uses: ./.github/actions/restore-state
+      with:
+        PROJECT_PATH: ${{ inputs.PROJECT_PATH }}
 
     - name: Call Get deployment status
       id: call-get-deployment-status
@@ -87,6 +101,7 @@ jobs:
       with:
         password: ${{ secrets.PASSWORD }}
         github_token: ${{ secrets.GITHUB_TOKEN }}
+        PROJECT_PATH: ${{ inputs.PROJECT_PATH }}
 
     - name: Update existing deployment
       id: update-deployment
@@ -184,12 +199,12 @@ jobs:
         #BID_LENGTH=$(echo "$BID_LIST" | jq -r '.bids | length')
 
         # Remove blocklisted providers from the BID_LIST
-        if [[ -f .akash/BLOCKLIST ]]; then
+        if [[ -f ${{ inputs.PROJECT_PATH }}/.akash/BLOCKLIST ]]; then
           while read address; do
-            echo "Warning! Skipping provider $address based on the .akash/BLOCKLIST!"
+            echo "Warning! Skipping provider $address based on the ${{ inputs.PROJECT_PATH }}/.akash/BLOCKLIST!"
             TMP_BID_LIST="$(echo "$BID_LIST" | jq --arg address "$address" -c '.bids[] | del(select(.bid.bid_id.provider == $address))' | jq -s '{"bids": del(.. | nulls)}')"
             BID_LIST="$TMP_BID_LIST"
-          done < <(cat .akash/BLOCKLIST)  # use process substitution to avoid subshell creation (cat file | while read ...) where variables are not preserved
+          done < <(cat ${{ inputs.PROJECT_PATH }}/.akash/BLOCKLIST)  # use process substitution to avoid subshell creation (cat file | while read ...) where variables are not preserved
         fi
         echo "$BID_LIST" | jq -r '.bids[].bid | {"price":.price.amount, "provider":.bid_id.provider}'  | jq -s -r 'sort_by(.price | tonumber) | .[] | flatten | @tsv'
         if test ! -z $PROVIDER; then
@@ -311,18 +326,18 @@ jobs:
         PASSWORD: ${{ secrets.PASSWORD }}
       run: |
         test ! -z "$AKASH_DSEQ"
-        mkdir .akash 2>/dev/null || :
-        echo "${PASSWORD}" | ${CLIENT} lease-status | jq -r . > .akash/STATUS
-        cat .akash/STATUS
+        mkdir ${{ inputs.PROJECT_PATH }}/.akash 2>/dev/null || :
+        echo "${PASSWORD}" | ${CLIENT} lease-status | jq -r . > ${{ inputs.PROJECT_PATH }}/.akash/STATUS
+        cat ${{ inputs.PROJECT_PATH }}/.akash/STATUS
 
     - name: Save DSEQ and PROVIDER
       if: steps.create-lease.outcome == 'success' || steps.update-deployment.outcome == 'success'
       run: |
         test ! -z "$AKASH_DSEQ"
         test ! -z "$AKASH_PROVIDER"
-        mkdir .akash 2>/dev/null || :
-        echo "$AKASH_DSEQ" > .akash/DSEQ
-        echo "$AKASH_PROVIDER" > .akash/PROVIDER
+        mkdir ${{ inputs.PROJECT_PATH }}/.akash 2>/dev/null || :
+        echo "$AKASH_DSEQ" > ${{ inputs.PROJECT_PATH }}/.akash/DSEQ
+        echo "$AKASH_PROVIDER" > ${{ inputs.PROJECT_PATH }}/.akash/PROVIDER
 
     - name: Commit & Push changes
       uses: actions-js/push@master
