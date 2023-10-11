@@ -1,0 +1,28 @@
+name: Close state deployment
+description: Close a single deployment based on the state (.akash/{DSEQ,PROVIDER})
+
+inputs:
+  password:
+    description: 'Password to decrypt the wallet'
+    required: true
+  github_token:
+    description: 'GITHUB_TOKEN'
+    required: true
+
+runs:
+  using: "composite"
+
+  steps:
+    - name: Remove the state if deployment is inactive
+      id: remove-state
+      if: steps.close-deployment.outcome == 'success'
+      shell: bash
+      run: |
+        echo "AKASH_DSEQ=" >> $GITHUB_ENV
+        echo "AKASH_PROVIDER=" >> $GITHUB_ENV
+        rm -vf .akash/DSEQ .akash/PROVIDER .akash/STATUS
+
+    - name: Commit & Push changes
+      uses: actions-js/push@master
+      with:
+        github_token: ${{ inputs.github_token }}

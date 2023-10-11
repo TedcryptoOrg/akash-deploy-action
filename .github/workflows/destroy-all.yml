@@ -1,0 +1,58 @@
+name: Destroy all deployments (releases all deposited AKT)
+#description: Close all active deployments for this account
+
+on:
+  workflow_dispatch:
+
+env:
+  ORG: akash-network
+  REPO: provider
+  CLIENT: provider-services
+  CLIENT_VERSION: 0.1.0
+  ARCH: amd64
+  # Akash Network
+  NET: mainnet
+  #BLOCK_TIME: 6s
+  BLOCK_TIME: 1s
+  # Quit if chain is running 30 seconds behind
+  CHAIN_LATENCY: 30
+  # Akash Client parameters
+  AKASH_KEYRING_BACKEND: file
+  AKASH_BROADCAST_MODE: block
+  #AKASH_BROADCAST_MODE: async
+  AKASH_YES: 1
+  AKASH_GAS_PRICES: 0.025uakt
+  AKASH_GAS: auto
+  AKASH_GAS_ADJUSTMENT: 1.5
+  AKASH_HOME: /home/runner/.akash
+  AKASH_FROM: default
+  AKASH_OUTPUT: json
+  # Minimum balance on the wallet in AKT
+  MIN_BALANCE: 10
+  AKASH_GSEQ: 1
+  AKASH_OSEQ: 1
+  SDL: deploy.yaml
+  #PROVIDER: akash18ga02jzaq8cw52anyhzkwta5wygufgu6zsz6xc
+
+
+jobs:
+  destroy-all:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Call Initialize Akash client
+        uses: ./.github/actions/init-akash
+        with:
+          seed: ${{ secrets.SEED }}
+          password: ${{ secrets.PASSWORD }}
+
+      - name: Call Close all active
+        uses: ./.github/actions/close-all-active
+        with:
+          password: ${{ secrets.PASSWORD }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
