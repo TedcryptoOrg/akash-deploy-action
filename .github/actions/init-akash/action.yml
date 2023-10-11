@@ -7,6 +7,9 @@ inputs:
   password:
     description: 'Password to encrypt the wallet'
     required: true
+  project_name:
+    description: 'Project name (will be used as a prefix for cache keys)'
+    required: true
 
 runs:
   using: "composite"
@@ -42,9 +45,9 @@ runs:
     with:
       path: |
         ~/cache
-      key: ${{ runner.os }}-deb
+      key: ${{ runner.os }}-${{ inputs.project_name }}-deb
       restore-keys: |
-        ${{ runner.os }}-deb
+        ${{ runner.os }}-${{ inputs.project_name }}-deb
 
   - name: Install Akash client deb
     shell: bash
@@ -104,9 +107,9 @@ runs:
     with:
       path: |
         ${{ env.AKASH_HOME }}/keyring-file
-      key: ${{ runner.os }}-wallet
+      key: ${{ runner.os }}-${{ inputs.project_name }}-wallet
       restore-keys: |
-        ${{ runner.os }}-wallet
+        ${{ runner.os }}-${{ inputs.project_name }}-wallet
 
   - name: AKASH_KEYRING_BACKEND
     id: akash-keyring-backend
@@ -156,9 +159,9 @@ runs:
     with:
       path: |
         ${{ env.AKASH_HOME }}/*.pem
-      key: ${{ runner.os }}-client-certs
+      key: ${{ runner.os }}-${{ inputs.project_name }}-client-certs
       restore-keys: |
-        ${{ runner.os }}-client-certs
+        ${{ runner.os }}-${{ inputs.project_name }}-client-certs
 
   - name: Configure the network
     shell: bash
