@@ -29,7 +29,7 @@ env:
   REPO: provider
   CLIENT: provider-services
   CLIENT_VERSION: 0.4.6
-  ARCH: amd64
+  ARCH: linux_amd64
   # Akash Network
   NET: mainnet
   #BLOCK_TIME: 6s
