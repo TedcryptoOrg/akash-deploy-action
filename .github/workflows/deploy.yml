@@ -7,10 +7,12 @@ on:
         description: 'Path for the project to deploy'
         required: false
         default: '.'
+        type: string
       project_name:
         description: 'Project name (will be used as prefix for cache keys)'
         required: false
         default: 'app'
+        type: string
     secrets:
       SEED:
         description: 'Seed phrase for the wallet'

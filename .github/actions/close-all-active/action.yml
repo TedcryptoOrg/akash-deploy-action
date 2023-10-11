@@ -5,9 +5,11 @@ inputs:
   password:
     description: 'Password to encrypt the wallet'
     required: true
+    type: string
   github_token:
     description: 'GITHUB_TOKEN'
     required: true
+    type: string
 
 runs:
   using: "composite"

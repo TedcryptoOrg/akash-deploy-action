@@ -4,6 +4,7 @@ inputs:
   PROJECT_PATH:
     description: 'Path to the project'
     required: true
+    type: string
 
 runs:
   using: "composite"

@@ -4,12 +4,15 @@ inputs:
   seed:
     description: 'Mnemonic seed to recover the wallet'
     required: true
+    type: string
   password:
     description: 'Password to encrypt the wallet'
     required: true
+    type: string
   project_name:
     description: 'Project name (will be used as a prefix for cache keys)'
     required: true
+    type: string
 
 runs:
   using: "composite"

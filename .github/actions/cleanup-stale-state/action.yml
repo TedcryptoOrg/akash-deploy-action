@@ -5,12 +5,15 @@ inputs:
   password:
     description: 'Password to decrypt the wallet'
     required: true
+    type: string
   github_token:
     description: 'GITHUB_TOKEN'
     required: true
+    type: string
   PROJECT_PATH:
     description: 'Path to the project'
     required: true
+    type: string
 
 runs:
   using: "composite"
