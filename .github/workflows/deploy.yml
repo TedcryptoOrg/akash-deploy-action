@@ -1,0 +1,330 @@
+name: Deploy me
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+env:
+  ORG: akash-network
+  REPO: provider
+  CLIENT: provider-services
+  CLIENT_VERSION: 0.1.0
+  ARCH: amd64
+  # Akash Network
+  NET: mainnet
+  #BLOCK_TIME: 6s
+  BLOCK_TIME: 1s
+  # Quit if chain is running 30 seconds behind
+  CHAIN_LATENCY: 30
+  # Akash Client parameters
+  AKASH_KEYRING_BACKEND: file
+  AKASH_BROADCAST_MODE: block
+  #AKASH_BROADCAST_MODE: async
+  AKASH_YES: 1
+  AKASH_GAS_PRICES: 0.025uakt
+  AKASH_GAS: auto
+  AKASH_GAS_ADJUSTMENT: 1.5
+  AKASH_HOME: /home/runner/.akash
+  AKASH_FROM: default
+  AKASH_OUTPUT: json
+  # Minimum balance on the wallet in AKT
+  MIN_BALANCE: 10
+  AKASH_GSEQ: 1
+  AKASH_OSEQ: 1
+  SDL: deploy.yaml
+  #PROVIDER: akash18ga02jzaq8cw52anyhzkwta5wygufgu6zsz6xc
+
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Call Initialize Akash client
+        uses: ./.github/actions/init-akash
+        with:
+          seed: ${{ secrets.SEED }}
+          password: ${{ secrets.PASSWORD }}
+
+      # Cleanup stale order (aka deployment) requests
+      - name: Call Cleanup stale order requests
+        uses: ./.github/actions/cleanup-stale-orders
+        with:
+          password: ${{ secrets.PASSWORD }}
+
+      # Restore .akash/{DSEQ,PROVIDER} state
+      - name: Call Restore state
+        id: call-restore-state
+        uses: ./.github/actions/restore-state
+
+      - name: Call Get deployment status
+        id: call-get-deployment-status
+        if: |
+          steps.call-restore-state.outcome == 'success' &&
+          ( env.AKASH_DSEQ != '' && env.AKASH_PROVIDER != '' )
+        uses: ./.github/actions/get-deployment-status
+
+      ## Debug contexts: https://docs.github.com/en/actions/learn-github-actions/contexts#example-printing-context-information-to-the-log
+      #- name: Dump steps context
+      #  shell: bash
+      #  run: |
+      #    echo '${{ toJSON(steps) }}'
+      #    echo '${{ steps.call-get-deployment-status.outputs.is-deployment-active }}'
+      #    exit 1
+
+      # close old deployment and remove it from .akash/{DSEQ,PROVIDER}
+      - name: Call Cleanup stale state
+        id: call-cleanup-stale-state
+        uses: ./.github/actions/cleanup-stale-state
+        if: steps.call-get-deployment-status.outputs.is-deployment-active == 'false'
+        with:
+          password: ${{ secrets.PASSWORD }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update existing deployment
+        id: update-deployment
+        if: steps.call-get-deployment-status.outputs.is-deployment-active == 'true'
+        env:
+          PASSWORD: ${{ secrets.PASSWORD }}
+        run: |
+          #echo "AKASH_DSEQ: $AKASH_DSEQ"
+          
+          ## === broadcast tx === ##
+          TX=$(echo "${PASSWORD}" | ${CLIENT} tx deployment update ${SDL} | jq -r '.txhash')
+          if test -z $TX; then
+            echo "No TX broadcasted!"
+            echo "If you see \"Invalid: deployment version\" error above, it is likely because the SDL file was not changed."
+            exit 1
+          fi
+          echo "TX: $TX"
+          sleep ${BLOCK_TIME}
+          RC=$(${CLIENT} query tx $TX | jq -r '.code')
+          case $RC in
+            0)
+              echo "TX successful"
+              ;;
+            11)
+              echo "Out of gas! Consider raising AKASH_GAS_ADJUSTMENT and trying again."
+              exit 1
+              ;;
+            *)
+              echo "Transaction $TX failed with code: '$RC'"
+              exit 1
+              ;;
+          esac
+          ## === broadcast tx === ##
+
+      - name: Broadcast the deployment request
+        id: create-deployment
+        if: |
+          ( steps.call-get-deployment-status.outputs.is-deployment-active != 'true' || steps.call-cleanup-stale-state.outcome == 'success' ) ||
+          steps.call-get-deployment-status.outcome == 'skipped'
+        env:
+          PASSWORD: ${{ secrets.PASSWORD }}
+        run: |
+          #echo "AKASH_DSEQ: $AKASH_DSEQ"
+          #echo "AKASH_GSEQ: $AKASH_GSEQ"
+          #echo "AKASH_OSEQ: $AKASH_OSEQ"
+          #echo "AKASH_PROVIDER: $AKASH_PROVIDER"
+          if test ! -z "$AKASH_DSEQ"; then
+            echo "Looks like there was an issue closing stale deployment: $AKASH_DSEQ/$AKASH_GSEQ/$AKASH_OSEQ"
+            exit 1
+          fi
+          
+          ## === broadcast tx === ##
+          TX=$(echo "${PASSWORD}" | ${CLIENT} tx deployment create ${SDL} | jq -r '.txhash')
+          if test -z $TX; then
+            echo "No TX broadcasted!"
+            exit 1
+          fi
+          echo "TX: $TX"
+          sleep ${BLOCK_TIME}
+          RC=$(${CLIENT} query tx $TX | jq -r '.code')
+          case $RC in
+            0)
+              echo "TX successful"
+              ;;
+            11)
+              echo "Out of gas! Consider raising AKASH_GAS_ADJUSTMENT and trying again."
+              exit 1
+              ;;
+            *)
+              echo "Transaction $TX failed with code: '$RC'"
+              exit 1
+              ;;
+          esac
+          ## === broadcast tx === ##
+          
+          AKASH_DSEQ=$(${CLIENT} query tx $TX | jq -r '.tx.body.messages[].id.dseq')
+          if test -z "$AKASH_DSEQ"; then
+            echo "Could not get AKASH_DSEQ, something is really wrong."
+            exit 1
+          fi
+          echo "Broadcasted AKASH_DSEQ: $AKASH_DSEQ to the Akash network."
+          echo "AKASH_DSEQ=$AKASH_DSEQ" >> $GITHUB_ENV
+
+      - name: Look for the bids on the Akash network
+        id: find-bids
+        if: steps.create-deployment.outcome == 'success'
+        env:
+          PASSWORD: ${{ secrets.PASSWORD }}
+        run: |
+          test ! -z "$AKASH_DSEQ"
+          echo "Giving providers 12 seconds to bid ..."
+          sleep 12
+          # add "--gseq 0 --oseq 0" -- to catch all (for future placement groups support)
+          BID_LIST="$(${CLIENT} query market bid list --state open)"
+          #BID_LENGTH=$(echo "$BID_LIST" | jq -r '.bids | length')
+          
+          # Remove blocklisted providers from the BID_LIST
+          if [[ -f .akash/BLOCKLIST ]]; then
+            while read address; do
+              echo "Warning! Skipping provider $address based on the .akash/BLOCKLIST!"
+              TMP_BID_LIST="$(echo "$BID_LIST" | jq --arg address "$address" -c '.bids[] | del(select(.bid.bid_id.provider == $address))' | jq -s '{"bids": del(.. | nulls)}')"
+              BID_LIST="$TMP_BID_LIST"
+            done < <(cat .akash/BLOCKLIST)  # use process substitution to avoid subshell creation (cat file | while read ...) where variables are not preserved
+          fi
+          echo "$BID_LIST" | jq -r '.bids[].bid | {"price":.price.amount, "provider":.bid_id.provider}'  | jq -s -r 'sort_by(.price | tonumber) | .[] | flatten | @tsv'
+          if test ! -z $PROVIDER; then
+            echo "PROVIDER parameter is set, locating the bid from provider: $PROVIDER ..."
+            AKASH_PROVIDER=$(echo "$BID_LIST" | jq -r '.bids[].bid.bid_id.provider' | grep -w "$PROVIDER")
+          else
+            echo "PROVIDER parameter was not set, locating the cheapest bid ..."
+            AKASH_PROVIDER=$(echo "$BID_LIST" | jq -r '.bids[].bid | {"price":.price.amount, "provider":.bid_id.provider}'  | jq -s -r 'sort_by(.price | tonumber) | .[0].provider')
+          fi
+          
+          if test -z "$AKASH_PROVIDER" || [[ "$AKASH_PROVIDER" == "null" ]]; then
+            echo "Could not find bids for $AKASH_DSEQ/$AKASH_GSEQ/$AKASH_OSEQ."
+            echo "Try to update your SDL manifest file, probably you are requesting too much of resources or too limiting attributes."
+            echo "Closing the deployment ..."
+          
+            ## === broadcast tx === ##
+            TX=$(echo "${PASSWORD}" | ${CLIENT} tx deployment close | jq -r '.txhash')
+            if test -z $TX; then
+              echo "No TX broadcasted!"
+              exit 1
+            fi
+            echo "TX: $TX"
+            sleep ${BLOCK_TIME}
+            RC=$(${CLIENT} query tx $TX | jq -r '.code')
+            case $RC in
+              0)
+                echo "TX successful"
+                ;;
+              11)
+                echo "Out of gas! Consider raising AKASH_GAS_ADJUSTMENT and trying again."
+                exit 1
+                ;;
+              *)
+                echo "Transaction $TX failed with code: '$RC'"
+                exit 1
+                ;;
+            esac
+            ## === broadcast tx === ##
+          
+            exit 1
+          fi
+          echo "AKASH_PROVIDER=$AKASH_PROVIDER" >> $GITHUB_ENV
+          echo "Selected AKASH_PROVIDER: $AKASH_PROVIDER"
+
+      - name: Accept the lease
+        id: create-lease
+        if: |
+          steps.create-deployment.outcome == 'success' &&
+          steps.find-bids.outcome == 'success'
+        env:
+          PASSWORD: ${{ secrets.PASSWORD }}
+        run: |
+          if test -z "$AKASH_DSEQ"; then
+            echo "AKASH_DSEQ is not set. Possible causes:"
+            echo "The client did not succeed broadcasting the deployment request. (Usually can happend due out of gas.)"
+            exit 1
+          fi
+          if test -z "$AKASH_PROVIDER"; then
+            echo "AKASH_PROVIDER is not set."
+            exit 1
+          fi
+          
+          echo "Going to accept the lease for: $AKASH_DSEQ/$AKASH_GSEQ/$AKASH_OSEQ on $AKASH_PROVIDER provider"
+          
+          ## === broadcast tx === ##
+          TX=$(echo "${PASSWORD}" | ${CLIENT} tx market lease create | jq -r '.txhash')
+          if test -z $TX; then
+            echo "No TX broadcasted!"
+            exit 1
+          fi
+          echo "TX: $TX"
+          sleep ${BLOCK_TIME}
+          RC=$(${CLIENT} query tx $TX | jq -r '.code')
+          case $RC in
+            0)
+              echo "TX successful"
+              ;;
+            11)
+              echo "Out of gas! Consider raising AKASH_GAS_ADJUSTMENT and trying again."
+              exit 1
+              ;;
+            *)
+              echo "Transaction $TX failed with code: '$RC'"
+              exit 1
+              ;;
+          esac
+          ## === broadcast tx === ##
+
+      - name: Deposit additional AKT tokens to the deployment
+        id: deposit-deployment
+        env:
+          PASSWORD: ${{ secrets.PASSWORD }}
+        if: steps.create-lease.outcome == 'success' || steps.update-deployment.outcome == 'success'
+        run: |
+          test ! -z "$AKASH_DSEQ"
+          DAYS_LEFT=$(${CLIENT} query escrow blocks-remaining | jq -r '.estimated_time_remaining/pow(10;9)/60/60/24|round')
+          DEPOSIT=$(${CLIENT} query deployment get | jq -r '.escrow_account.balance.amount|tonumber / pow(10;6)')
+          echo "${AKASH_DSEQ} has ${DAYS_LEFT} days left with ${DEPOSIT} AKT currently deposited."
+          echo "Consider depositing more AKT for it to last longer."
+          # TODO: create a dedicated job for this task?
+          # TODO: see to automate the minimum deposit (in days) / or rather add a crontab job which will take care of that.
+          #echo "${PASSWORD}" | ${CLIENT} tx deployment deposit 10000000uakt
+          #sleep ${BLOCK_TIME}
+
+      - name: Send manifest to the provider
+        id: send-manifest
+        if: steps.create-lease.outcome == 'success' || steps.update-deployment.outcome == 'success'
+        env:
+          PASSWORD: ${{ secrets.PASSWORD }}
+        run: |
+          test ! -z "$AKASH_DSEQ"
+          test ! -z "$AKASH_PROVIDER"
+          echo "${PASSWORD}" | ${CLIENT} send-manifest ${SDL}
+
+      - name: Lease status
+        id: lease-status
+        if: steps.create-lease.outcome == 'success' || steps.update-deployment.outcome == 'success'
+        env:
+          PASSWORD: ${{ secrets.PASSWORD }}
+        run: |
+          test ! -z "$AKASH_DSEQ"
+          mkdir .akash 2>/dev/null || :
+          echo "${PASSWORD}" | ${CLIENT} lease-status | jq -r . > .akash/STATUS
+          cat .akash/STATUS
+
+      - name: Save DSEQ and PROVIDER
+        if: steps.create-lease.outcome == 'success' || steps.update-deployment.outcome == 'success'
+        run: |
+          test ! -z "$AKASH_DSEQ"
+          test ! -z "$AKASH_PROVIDER"
+          mkdir .akash 2>/dev/null || :
+          echo "$AKASH_DSEQ" > .akash/DSEQ
+          echo "$AKASH_PROVIDER" > .akash/PROVIDER
+
+      - name: Commit & Push changes
+        uses: actions-js/push@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}

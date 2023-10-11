@@ -1,0 +1,32 @@
+unset AKASH_DSEQ
+echo "Find and close all active deployments (to release the deposited AKT from escrow account)"
+# add "--gseq 0 --oseq 0" -- to catch all (for future placement groups support)
+${CLIENT} query deployment list --state active | jq -r '["dseq", "deposit"], (.deployments[] | [.deployment.deployment_id.dseq, (.escrow_account.balance.amount|tonumber / pow(10;6))]) | @tsv' | column -t -s","
+${CLIENT} query deployment list --state active | jq -r '.deployments[].deployment.deployment_id.dseq' |
+  while read AKASH_DSEQ; do
+    export AKASH_DSEQ
+    ## === broadcast tx === ##
+    TX=$(echo "${PASSWORD}" | ${CLIENT} tx deployment close | jq -r '.txhash')
+    if test -z $TX; then
+      echo "No TX broadcasted!"
+      exit 1
+    fi
+    echo "TX: $TX"
+    sleep ${BLOCK_TIME}
+    RC=$(${CLIENT} query tx $TX | jq -r '.code')
+    case $RC in
+      0)
+        echo "TX successful"
+        ;;
+      11)
+        echo "Out of gas! Consider raising AKASH_GAS_ADJUSTMENT and trying again."
+        exit 1
+        ;;
+      *)
+        echo "Transaction $TX failed with code: '$RC'"
+        exit 1
+        ;;
+    esac
+    ## === broadcast tx === ##
+
+  done  ## while read AKASH_DSEQ;

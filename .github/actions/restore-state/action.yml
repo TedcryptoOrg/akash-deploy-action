@@ -1,0 +1,22 @@
+name: Restore the state
+description: Restore the state (.akash/{DSEQ,PROVIDER}) if any
+
+runs:
+  using: "composite"
+
+  steps:
+    - name: Restore the state
+      id: restore-state
+      continue-on-error: true
+      shell: bash
+      run: |
+        if [[ -f .akash/DSEQ && -f .akash/PROVIDER ]]; then
+          AKASH_DSEQ=$(cat .akash/DSEQ)
+          AKASH_PROVIDER=$(cat .akash/PROVIDER)
+        fi
+        test ! -z "$AKASH_DSEQ"
+        test ! -z "$AKASH_PROVIDER"
+        echo "Expecting $AKASH_DSEQ/$AKASH_GSEQ/$AKASH_OSEQ deployment on $AKASH_PROVIDER provider."
+        echo "Going to verify whether it is alive."
+        echo "AKASH_DSEQ=$AKASH_DSEQ" >> $GITHUB_ENV
+        echo "AKASH_PROVIDER=$AKASH_PROVIDER" >> $GITHUB_ENV
