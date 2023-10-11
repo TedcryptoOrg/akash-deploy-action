@@ -18,7 +18,7 @@ on:
       PASSWORD:
         description: 'Password to decrypt the wallet'
         required: true
-      GITHUB_TOKEN:
+      ghcr-token:
         description: 'GITHUB_TOKEN'
         required: true
 
@@ -105,7 +105,7 @@ jobs:
       if: steps.call-get-deployment-status.outputs.is-deployment-active == 'false'
       with:
         password: ${{ secrets.PASSWORD }}
-        github_token: ${{ secrets.GITHUB_TOKEN }}
+        github_token: ${{ secrets.ghcr-token }}
         PROJECT_PATH: ${{ inputs.PROJECT_PATH }}
 
     - name: Update existing deployment
@@ -347,4 +347,4 @@ jobs:
     - name: Commit & Push changes
       uses: actions-js/push@master
       with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
+        github_token: ${{ secrets.ghcr-token }}
