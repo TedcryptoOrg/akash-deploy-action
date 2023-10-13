@@ -16,8 +16,8 @@ runs:
     shell: bash
     run: |
       if [[ -f ${{ inputs.PROJECT_PATH }}/.akash/DSEQ && -f ${{ inputs.PROJECT_PATH }}/.akash/PROVIDER ]]; then
-        AKASH_DSEQ=$(cat .akash/DSEQ)
-        AKASH_PROVIDER=$(cat .akash/PROVIDER)
+        AKASH_DSEQ=$(cat ${{ inputs.PROJECT_PATH }}/.akash/DSEQ)
+        AKASH_PROVIDER=$(cat ${{ inputs.PROJECT_PATH }}/.akash/PROVIDER)
       fi
       test ! -z "$AKASH_DSEQ"
       test ! -z "$AKASH_PROVIDER"
