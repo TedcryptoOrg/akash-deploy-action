@@ -119,7 +119,7 @@ jobs:
         #echo "AKASH_DSEQ: $AKASH_DSEQ"
 
         ## === broadcast tx === ##
-        TX=$(echo "${PASSWORD}" | ${CLIENT} tx deployment update ${SDL} | jq -r '.txhash')
+        TX=$(echo "${PASSWORD}" | ${CLIENT} tx deployment update ${PROJECT_PATH}/${SDL} | jq -r '.txhash')
         if test -z $TX; then
           echo "No TX broadcasted!"
           echo "If you see \"Invalid: deployment version\" error above, it is likely because the SDL file was not changed."
@@ -161,7 +161,7 @@ jobs:
         fi
 
         ## === broadcast tx === ##
-        TX=$(echo "${PASSWORD}" | ${CLIENT} tx deployment create ${SDL} | jq -r '.txhash')
+        TX=$(echo "${PASSWORD}" | ${CLIENT} tx deployment create ${PROJECT_PATH}/${SDL} | jq -r '.txhash')
         if test -z $TX; then
           echo "No TX broadcasted!"
           exit 1
@@ -324,7 +324,7 @@ jobs:
       run: |
         test ! -z "$AKASH_DSEQ"
         test ! -z "$AKASH_PROVIDER"
-        echo "${PASSWORD}" | ${CLIENT} send-manifest ${SDL}
+        echo "${PASSWORD}" | ${CLIENT} send-manifest ${PROJECT_PATH}/${SDL}
 
     - name: Lease status
       id: lease-status
