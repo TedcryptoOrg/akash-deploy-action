@@ -1,5 +1,11 @@
 name: Restore the state
 
+inputs:
+  PROJECT_PATH:
+    description: 'Path to the project'
+    required: true
+    type: string
+
 runs:
   using: "composite"
 
@@ -9,7 +15,7 @@ runs:
     continue-on-error: true
     shell: bash
     run: |
-      if [[ -f .akash/DSEQ && -f .akash/PROVIDER ]]; then
+      if [[ -f ${{ inputs.PROJECT_PATH }}/.akash/DSEQ && -f ${{ inputs.PROJECT_PATH }}/.akash/PROVIDER ]]; then
         AKASH_DSEQ=$(cat .akash/DSEQ)
         AKASH_PROVIDER=$(cat .akash/PROVIDER)
       fi

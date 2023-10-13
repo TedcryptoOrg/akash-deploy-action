@@ -5,9 +5,15 @@ inputs:
   password:
     description: 'Password to decrypt the wallet'
     required: true
+    type: string
   github_token:
     description: 'GITHUB_TOKEN'
     required: true
+    type: string
+  PROJECT_PATH:
+    description: 'Path to the project'
+    required: true
+    type: string
 
 runs:
   using: "composite"
@@ -51,7 +57,7 @@ runs:
     run: |
       echo "AKASH_DSEQ=" >> $GITHUB_ENV
       echo "AKASH_PROVIDER=" >> $GITHUB_ENV
-      rm -vf .akash/DSEQ .akash/PROVIDER .akash/STATUS
+      rm -vf ${{ inputs.PROJECT_PATH }}/.akash/DSEQ ${{ inputs.PROJECT_PATH }}/.akash/PROVIDER ${{ inputs.PROJECT_PATH }}/.akash/STATUS
 
   - name: Commit & Push changes
     uses: actions-js/push@master

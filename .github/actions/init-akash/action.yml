@@ -4,9 +4,15 @@ inputs:
   seed:
     description: 'Mnemonic seed to recover the wallet'
     required: true
+    type: string
   password:
     description: 'Password to encrypt the wallet'
     required: true
+    type: string
+  project_name:
+    description: 'Project name (will be used as a prefix for cache keys)'
+    required: true
+    type: string
 
 runs:
   using: "composite"
@@ -42,9 +48,9 @@ runs:
     with:
       path: |
         ~/cache
-      key: ${{ runner.os }}-deb
+      key: ${{ runner.os }}-${{ inputs.project_name }}-deb
       restore-keys: |
-        ${{ runner.os }}-deb
+        ${{ runner.os }}-${{ inputs.project_name }}-deb
 
   - name: Install Akash client deb
     shell: bash
@@ -104,9 +110,9 @@ runs:
     with:
       path: |
         ${{ env.AKASH_HOME }}/keyring-file
-      key: ${{ runner.os }}-wallet
+      key: ${{ runner.os }}-${{ inputs.project_name }}-wallet
       restore-keys: |
-        ${{ runner.os }}-wallet
+        ${{ runner.os }}-${{ inputs.project_name }}-wallet
 
   - name: AKASH_KEYRING_BACKEND
     id: akash-keyring-backend
@@ -156,16 +162,16 @@ runs:
     with:
       path: |
         ${{ env.AKASH_HOME }}/*.pem
-      key: ${{ runner.os }}-client-certs
+      key: ${{ runner.os }}-${{ inputs.project_name }}-client-certs
       restore-keys: |
-        ${{ runner.os }}-client-certs
+        ${{ runner.os }}-${{ inputs.project_name }}-client-certs
 
   - name: Configure the network
     shell: bash
     run: |
-      CHAIN_METADATA=$(curl -s https://raw.githubusercontent.com/${ORG}/net/master/${NET}/meta.json)
-      #FAUCET=$(curl -s https://raw.githubusercontent.com/${ORG}/net/master/$NET/faucet-url.txt)
-      NET_VERSION=$(curl -s https://raw.githubusercontent.com/${ORG}/net/master/$NET/version.txt)
+      CHAIN_METADATA=$(curl -s https://raw.githubusercontent.com/${ORG}/net/main/${NET}/meta.json)
+      #FAUCET=$(curl -s https://raw.githubusercontent.com/${ORG}/net/main/$NET/faucet-url.txt)
+      NET_VERSION=$(curl -s https://raw.githubusercontent.com/${ORG}/net/main/$NET/version.txt)
       AKASH_CHAIN_ID="$(echo $CHAIN_METADATA | jq -r .chain_id)"
       # TODO: pick RPC with lowest latency
       AKASH_NODE="$(echo $CHAIN_METADATA | jq -r .apis.rpc[0].address)"

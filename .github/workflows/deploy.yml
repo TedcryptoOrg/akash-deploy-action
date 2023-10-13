@@ -1,17 +1,35 @@
 name: Deploy me
 
 on:
-  workflow_dispatch:
-  push:
-    branches:
-      - main
+  workflow_call:
+    inputs:
+      PROJECT_PATH:
+        description: 'Path for the project to deploy'
+        required: false
+        default: '.'
+        type: string
+      project_name:
+        description: 'Project name (will be used as prefix for cache keys)'
+        required: false
+        default: 'app'
+        type: string
+    secrets:
+      SEED:
+        description: 'Seed phrase for the wallet'
+        required: true
+      PASSWORD:
+        description: 'Password to decrypt the wallet'
+        required: true
+      ghcr-token:
+        description: 'GITHUB_TOKEN'
+        required: true
 
 env:
   ORG: akash-network
   REPO: provider
   CLIENT: provider-services
-  CLIENT_VERSION: 0.1.0
-  ARCH: amd64
+  CLIENT_VERSION: 0.4.6
+  ARCH: linux_amd64
   # Akash Network
   NET: mainnet
   #BLOCK_TIME: 6s
@@ -48,28 +66,31 @@ jobs:
       uses: actions/checkout@v3
 
     - name: Call Initialize Akash client
-      uses: ./.github/actions/init-akash
+      uses: TedcryptoOrg/akash-deploy-action/.github/actions/init-akash@make-deploy-sharable
       with:
         seed: ${{ secrets.SEED }}
         password: ${{ secrets.PASSWORD }}
+        project_name: ${{ inputs.project_name }}
 
     # Cleanup stale order (aka deployment) requests
     - name: Call Cleanup stale order requests
-      uses: ./.github/actions/cleanup-stale-orders
+      uses: TedcryptoOrg/akash-deploy-action/.github/actions/cleanup-stale-orders@make-deploy-sharable
       with:
         password: ${{ secrets.PASSWORD }}
 
     # Restore .akash/{DSEQ,PROVIDER} state
     - name: Call Restore state
       id: call-restore-state
-      uses: ./.github/actions/restore-state
+      uses: TedcryptoOrg/akash-deploy-action/.github/actions/restore-state@make-deploy-sharable
+      with:
+        PROJECT_PATH: ${{ inputs.PROJECT_PATH }}
 
     - name: Call Get deployment status
       id: call-get-deployment-status
       if: |
         steps.call-restore-state.outcome == 'success' &&
         ( env.AKASH_DSEQ != '' && env.AKASH_PROVIDER != '' )
-      uses: ./.github/actions/get-deployment-status
+      uses: TedcryptoOrg/akash-deploy-action/.github/actions/get-deployment-status@make-deploy-sharable
 
     ## Debug contexts: https://docs.github.com/en/actions/learn-github-actions/contexts#example-printing-context-information-to-the-log
     #- name: Dump steps context
@@ -82,11 +103,12 @@ jobs:
     # close old deployment and remove it from .akash/{DSEQ,PROVIDER}
     - name: Call Cleanup stale state
       id: call-cleanup-stale-state
-      uses: ./.github/actions/cleanup-stale-state
+      uses: TedcryptoOrg/akash-deploy-action/.github/actions/cleanup-stale-state@make-deploy-sharable
       if: steps.call-get-deployment-status.outputs.is-deployment-active == 'false'
       with:
         password: ${{ secrets.PASSWORD }}
-        github_token: ${{ secrets.GITHUB_TOKEN }}
+        github_token: ${{ secrets.ghcr-token }}
+        PROJECT_PATH: ${{ inputs.PROJECT_PATH }}
 
     - name: Update existing deployment
       id: update-deployment
@@ -97,7 +119,7 @@ jobs:
         #echo "AKASH_DSEQ: $AKASH_DSEQ"
 
         ## === broadcast tx === ##
-        TX=$(echo "${PASSWORD}" | ${CLIENT} tx deployment update ${SDL} | jq -r '.txhash')
+        TX=$(echo "${PASSWORD}" | ${CLIENT} tx deployment update ${{ inputs.PROJECT_PATH }}/${SDL} | jq -r '.txhash')
         if test -z $TX; then
           echo "No TX broadcasted!"
           echo "If you see \"Invalid: deployment version\" error above, it is likely because the SDL file was not changed."
@@ -139,7 +161,7 @@ jobs:
         fi
 
         ## === broadcast tx === ##
-        TX=$(echo "${PASSWORD}" | ${CLIENT} tx deployment create ${SDL} | jq -r '.txhash')
+        TX=$(echo "${PASSWORD}" | ${CLIENT} tx deployment create ${{ inputs.PROJECT_PATH }}/${SDL} | jq -r '.txhash')
         if test -z $TX; then
           echo "No TX broadcasted!"
           exit 1
@@ -184,12 +206,12 @@ jobs:
         #BID_LENGTH=$(echo "$BID_LIST" | jq -r '.bids | length')
 
         # Remove blocklisted providers from the BID_LIST
-        if [[ -f .akash/BLOCKLIST ]]; then
+        if [[ -f ${{ inputs.PROJECT_PATH }}/.akash/BLOCKLIST ]]; then
           while read address; do
-            echo "Warning! Skipping provider $address based on the .akash/BLOCKLIST!"
+            echo "Warning! Skipping provider $address based on the ${{ inputs.PROJECT_PATH }}/.akash/BLOCKLIST!"
             TMP_BID_LIST="$(echo "$BID_LIST" | jq --arg address "$address" -c '.bids[] | del(select(.bid.bid_id.provider == $address))' | jq -s '{"bids": del(.. | nulls)}')"
             BID_LIST="$TMP_BID_LIST"
-          done < <(cat .akash/BLOCKLIST)  # use process substitution to avoid subshell creation (cat file | while read ...) where variables are not preserved
+          done < <(cat ${{ inputs.PROJECT_PATH }}/.akash/BLOCKLIST)  # use process substitution to avoid subshell creation (cat file | while read ...) where variables are not preserved
         fi
         echo "$BID_LIST" | jq -r '.bids[].bid | {"price":.price.amount, "provider":.bid_id.provider}'  | jq -s -r 'sort_by(.price | tonumber) | .[] | flatten | @tsv'
         if test ! -z $PROVIDER; then
@@ -302,7 +324,7 @@ jobs:
       run: |
         test ! -z "$AKASH_DSEQ"
         test ! -z "$AKASH_PROVIDER"
-        echo "${PASSWORD}" | ${CLIENT} send-manifest ${SDL}
+        echo "${PASSWORD}" | ${CLIENT} send-manifest ${{ inputs.PROJECT_PATH }}/${SDL}
 
     - name: Lease status
       id: lease-status
@@ -311,20 +333,20 @@ jobs:
         PASSWORD: ${{ secrets.PASSWORD }}
       run: |
         test ! -z "$AKASH_DSEQ"
-        mkdir .akash 2>/dev/null || :
-        echo "${PASSWORD}" | ${CLIENT} lease-status | jq -r . > .akash/STATUS
-        cat .akash/STATUS
+        mkdir ${{ inputs.PROJECT_PATH }}/.akash 2>/dev/null || :
+        echo "${PASSWORD}" | ${CLIENT} lease-status | jq -r . > ${{ inputs.PROJECT_PATH }}/.akash/STATUS
+        cat ${{ inputs.PROJECT_PATH }}/.akash/STATUS
 
     - name: Save DSEQ and PROVIDER
       if: steps.create-lease.outcome == 'success' || steps.update-deployment.outcome == 'success'
       run: |
         test ! -z "$AKASH_DSEQ"
         test ! -z "$AKASH_PROVIDER"
-        mkdir .akash 2>/dev/null || :
-        echo "$AKASH_DSEQ" > .akash/DSEQ
-        echo "$AKASH_PROVIDER" > .akash/PROVIDER
+        mkdir ${{ inputs.PROJECT_PATH }}/.akash 2>/dev/null || :
+        echo "$AKASH_DSEQ" > ${{ inputs.PROJECT_PATH }}/.akash/DSEQ
+        echo "$AKASH_PROVIDER" > ${{ inputs.PROJECT_PATH }}/.akash/PROVIDER
 
     - name: Commit & Push changes
       uses: actions-js/push@master
       with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
+        github_token: ${{ secrets.ghcr-token }}
