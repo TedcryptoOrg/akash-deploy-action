@@ -2,7 +2,28 @@ name: Nuke all deployments (releases all deposited AKT)
 #description: Close all active deployments for this account
 
 on:
-  workflow_dispatch:
+  workflow_call:
+    inputs:
+      PROJECT_PATH:
+        description: 'Path for the project to deploy'
+        required: false
+        default: '.'
+        type: string
+      project_name:
+        description: 'Project name (will be used as prefix for cache keys)'
+        required: false
+        default: 'app'
+        type: string
+    secrets:
+      SEED:
+        description: 'Seed phrase for the wallet'
+        required: true
+      PASSWORD:
+        description: 'Password to decrypt the wallet'
+        required: true
+      ghcr-token:
+        description: 'GITHUB_TOKEN'
+        required: true
 
 env:
   ORG: akash-network
@@ -46,13 +67,15 @@ jobs:
       uses: actions/checkout@v3
 
     - name: Call Initialize Akash client
-      uses: ./.github/actions/init-akash
+      uses: TedcryptoOrg/akash-deploy-action/.github/actions/init-akash@main
       with:
         seed: ${{ secrets.SEED }}
         password: ${{ secrets.PASSWORD }}
+        project_name: ${{ inputs.project_name }}
 
     - name: Call Close all active
-      uses: ./.github/actions/close-all-active
+      uses: TedcryptoOrg/akash-deploy-action/.github/actions/close-all-active@main
       with:
         password: ${{ secrets.PASSWORD }}
-        github_token: ${{ secrets.GITHUB_TOKEN }}
+        github_token: ${{ secrets.ghcr-token }}
+        PROJECT_PATH: ${{ inputs.PROJECT_PATH }}
