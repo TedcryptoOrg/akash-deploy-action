@@ -2,6 +2,10 @@ name: Close state deployment
 description: Close a single deployment based on the state (.akash/{DSEQ,PROVIDER})
 
 inputs:
+  project_path:
+    description: 'Path for the project to deploy'
+    required: true
+    type: string
   password:
     description: 'Password to decrypt the wallet'
     required: true
@@ -54,7 +58,7 @@ runs:
     run: |
       echo "AKASH_DSEQ=" >> $GITHUB_ENV
       echo "AKASH_PROVIDER=" >> $GITHUB_ENV
-      rm -vf .akash/DSEQ .akash/PROVIDER .akash/STATUS
+      rm -vf ${{ inputs.project_path }}/.akash/DSEQ ${{ inputs.project_path }}/.akash/PROVIDER ${{ inputs.project_path }}/.akash/STATUS
 
   - name: Commit & Push changes
     uses: actions-js/push@master

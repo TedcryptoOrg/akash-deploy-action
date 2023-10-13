@@ -2,7 +2,28 @@ name: Destroy me
 #description: Close a single deployment based on the state (.akash/{DSEQ,PROVIDER})
 
 on:
-  workflow_dispatch:
+  workflow_call:
+    inputs:
+      PROJECT_PATH:
+        description: 'Path for the project to deploy'
+        required: false
+        default: '.'
+        type: string
+      project_name:
+        description: 'Project name (will be used as prefix for cache keys)'
+        required: false
+        default: 'app'
+        type: string
+    secrets:
+      SEED:
+        description: 'Seed phrase for the wallet'
+        required: true
+      PASSWORD:
+        description: 'Password to decrypt the wallet'
+        required: true
+      ghcr-token:
+        description: 'GITHUB_TOKEN'
+        required: true
 
 env:
   ORG: akash-network
@@ -42,30 +63,31 @@ jobs:
       contents: write
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
-
     - name: Call Initialize Akash client
-      uses: ./.github/actions/init-akash
+      uses: TedcryptoOrg/akash-deploy-action/.github/actions/init-akash@main
       with:
         seed: ${{ secrets.SEED }}
         password: ${{ secrets.PASSWORD }}
+        project_name: ${{ inputs.project_name }}
 
     # Restore .akash/{DSEQ,PROVIDER} state
     - name: Call Restore state
       id: call-restore-state
-      uses: ./.github/actions/restore-state
+      uses: TedcryptoOrg/akash-deploy-action/.github/actions/restore-state@main
+      with:
+        PROJECT_PATH: ${{ inputs.PROJECT_PATH }}
 
     - name: Call Get deployment status
       id: call-get-deployment-status
       if: |
         steps.call-restore-state.outcome == 'success' &&
         ( env.AKASH_DSEQ != '' && env.AKASH_PROVIDER != '' )
-      uses: ./.github/actions/get-deployment-status
+      uses: TedcryptoOrg/akash-deploy-action/.github/actions/get-deployment-status@main
 
     - name: Call Close state deployment
-      uses: ./.github/actions/close-state-deployment
+      uses: TedcryptoOrg/akash-deploy-action/.github/actions/close-state-deployment@main
       if: steps.call-get-deployment-status.outputs.is-deployment-active == 'true'
       with:
         password: ${{ secrets.PASSWORD }}
-        github_token: ${{ secrets.GITHUB_TOKEN }}
+        github_token: ${{ secrets.ghcr-token }}
+        PROJECT_PATH: ${{ inputs.PROJECT_PATH }}
