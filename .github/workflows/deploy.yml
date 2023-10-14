@@ -13,6 +13,10 @@ on:
         required: false
         default: 'app'
         type: string
+      image:
+        description: 'Change the image tag to deploy'
+        required: true
+        type: string
     secrets:
       SEED:
         description: 'Seed phrase for the wallet'
@@ -117,6 +121,14 @@ jobs:
         PASSWORD: ${{ secrets.PASSWORD }}
       run: |
         #echo "AKASH_DSEQ: $AKASH_DSEQ"
+        
+        # extract image name without version from image input
+        IMAGE_NAME=$(echo "${{ inputs.image }}" | cut -d':' -f1)
+        echo "IMAGE_NAME: $IMAGE_NAME"
+        echo "Changing SDL to use the new image: ${{ inputs.image }}"
+        
+        # Change the image IMAGE_NAME version from the SDL file
+        sed -i "s|image: $IMAGE_NAME:.*|image: ${{ inputs.image }}|g" ${{ inputs.PROJECT_PATH }}/${SDL}
 
         ## === broadcast tx === ##
         TX=$(echo "${PASSWORD}" | ${CLIENT} tx deployment update ${{ inputs.PROJECT_PATH }}/${SDL} | jq -r '.txhash')
