@@ -64,7 +64,7 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Call Initialize Akash client
       uses: TedcryptoOrg/akash-deploy-action/.github/actions/init-akash@main
