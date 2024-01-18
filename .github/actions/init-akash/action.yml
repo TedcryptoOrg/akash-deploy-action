@@ -44,7 +44,7 @@ runs:
   # cache .deb files to reduce the network load and accelerate the execution time
   - name: Restore Akash client deb from cache
     id: cache-deb-restore
-    uses: actions/cache/restore@v3
+    uses: actions/cache/restore@v4
     with:
       path: |
         ~/cache
@@ -69,7 +69,7 @@ runs:
 
   - name: Save Akash client deb to cache
     id: cache-deb-save
-    uses: actions/cache/save@v3
+    uses: actions/cache/save@v4
     with:
       path: |
         ~/cache
@@ -106,7 +106,7 @@ runs:
 
   - name: Restore encrypted wallet from cache
     id: cache-wallet-restore
-    uses: actions/cache/restore@v3
+    uses: actions/cache/restore@v4
     with:
       path: |
         ${{ env.AKASH_HOME }}/keyring-file
@@ -150,7 +150,7 @@ runs:
   - name: Save encrypted wallet to cache
     if: steps.akash-keyring-backend.outputs.is != 'test'
     id: cache-wallet-save
-    uses: actions/cache/save@v3
+    uses: actions/cache/save@v4
     with:
       path: |
         ${{ env.AKASH_HOME }}/keyring-file
@@ -158,7 +158,7 @@ runs:
 
   - name: Restore client certificates from cache
     id: cache-client-certs-restore
-    uses: actions/cache/restore@v3
+    uses: actions/cache/restore@v4
     with:
       path: |
         ${{ env.AKASH_HOME }}/*.pem
@@ -279,7 +279,7 @@ runs:
   - name: Save client certs to cache
     # TODO(security): encrypt akash client certificates before storing them in the cache
     id: cache-client-certs-save
-    uses: actions/cache/save@v3
+    uses: actions/cache/save@v4
     with:
       path: |
         ${{ env.AKASH_HOME }}/*.pem
